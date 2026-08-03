@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LEN-Axis · Reporting Commercial</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <img src="logo-lenaxis.png" alt="LEN-Axis" class="brand-logo">
+    <div>
+      <h1>Reporting Commercial</h1>
+      <div class="subtitle">LEN Médical &amp; Axis Santé — sourcé depuis "Reporting Commercial 2026"</div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="seg" id="year-seg">
+      <button data-year="2026" class="active">2026</button>
+      <button data-year="2027">2027</button>
+    </div>
+    <div class="seg" id="vision-seg">
+      <button data-vision="real" class="active">Réalisé</button>
+      <button data-vision="cde">Commandé</button>
+    </div>
+    <div class="seg" id="compare-seg">
+      <button data-compare="budget" class="active">vs Budget</button>
+      <button data-compare="n1">vs N-1</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="cash" class="active">Cash</button>
+  <button data-tab="synthese">Synthèse CA Global</button>
+  <button data-tab="global">CA Digital par AT</button>
+  <button data-tab="clients">CA Digital par Client</button>
+  <button data-tab="graphs">Synthèse CA Digital</button>
+  <button data-tab="tendance">MM 12 Commande Digital</button>
+  <button data-tab="perf">Perf. Commerciale</button>
+  <button data-tab="perfTotal">Perf Commerciale Totale</button>
+</nav>
+
+<main id="main"></main>
+
+<script src="app.js"></script>
+</body>
+</html>
