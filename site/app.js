@@ -383,17 +383,20 @@ function renderGlobal() {
     kpiTile('Avancement vs Budget', budgetAdvanceDelta.text, totalBudgetDigital ? fmtK(totalBudgetDigital) : 'Budget n.d.', budgetAdvanceDelta.cls),
   ];
 
-  // Le total est affiché en ligne de synthèse SANS jauge : une barre de 9,4 M€ et une barre de
-  // 1,3 M€ occupaient auparavant des longueurs comparables, chacune sur son échelle, ce qui
-  // laissait croire que la Cardiologie pesait presque autant que le Digital entier. Toutes les
-  // jauges de ce panneau partagent désormais une seule et même échelle.
-  const totalRow = `<div class="gauge-row total-row-first" style="align-items:center">
+  // Le total a sa propre échelle (comme chaque ligne de l'onglet Synthèse) : sa couleur foncée le
+  // distingue des barres par AT ci-dessous, qui partagent entre elles une échelle commune.
+  const maxValTotal = Math.max(d.digital_total, totalRef || 0, 1) * 1.06;
+  const totalCaPct = Math.max((d.digital_total / maxValTotal) * 100, 0);
+  const totalRefPct = (totalRef && totalRef > 0) ? (totalRef / maxValTotal) * 100 : null;
+  const totalRow = `<div class="gauge-row total-row-first">
     <div class="gauge-name">CA Digital total</div>
-    <div class="gauge-track" style="background:none;border:none">
-      <span style="font-size:13px;opacity:.7">${cmpLabel} : ${totalRef !== null && totalRef !== undefined ? fmtK(totalRef) : 'n.d.'} — échelle propre, non comparable aux barres ci-dessous</span>
+    <div class="gauge-track">
+      <div class="gauge-fill total-fill" style="width:${totalCaPct}%"></div>
+      ${totalRefPct !== null ? `<div class="gauge-target" style="left:${totalRefPct}%"><span class="gauge-target-label">${fmtK(totalRef)}</span></div>` : ''}
     </div>
     <div class="gauge-stats">
       <div class="gauge-ca">${fmtK(d.digital_total)}</div>
+      <div class="gauge-cmp">${cmpLabel} : ${totalRef !== null && totalRef !== undefined ? fmtK(totalRef) : 'n.d.'}</div>
     </div>
     <div class="gauge-pct ${digitalDelta.cls}">${digitalDelta.text}</div>
   </div>`;
@@ -455,6 +458,7 @@ function renderGlobal() {
       <h2>CA Digital par spécialité médicale</h2>
       <div class="panel-sub">Vision ${visionLabel} — ${state.year} · comparé à : ${cmpLabel}</div>
       <div class="legend">
+        <div class="item"><span class="swatch" style="background:var(--total-color)"></span>CA Digital total</div>
         <div class="item"><span class="swatch" style="background:var(--series-1)"></span>CA ${visionLabel.toLowerCase()}</div>
         <div class="item"><span class="swatch" style="background:var(--good)"></span>CA ≥ ${cmpLabel}</div>
         <div class="item"><span class="swatch" style="background:var(--series-2)"></span>${cmpLabel} (repère)</div>
@@ -463,7 +467,7 @@ function renderGlobal() {
       ${gaugeRows}
       ${bewinkRow}
       <div class="footnote">
-        ${bewinkRow ? `Bewink n'est pas une spécialité médicale : c'est une section distincte du fichier source, hors du "CA Digital total" ci-dessus qui porte sur le seul périmètre Axis/Len. Elle est en revanche bien intégrée à la ligne "CA Digital" de l'onglet "Synthèse CA Global". Toutes les barres de ce panneau partagent une même échelle ; la ligne de total, d'un autre ordre de grandeur, est donnée sans jauge pour ne pas induire de comparaison visuelle trompeuse. ` : ''}
+        ${bewinkRow ? `Bewink n'est pas une spécialité médicale : c'est une section distincte du fichier source, hors du "CA Digital total" ci-dessus qui porte sur le seul périmètre Axis/Len. Elle est en revanche bien intégrée à la ligne "CA Digital" de l'onglet "Synthèse CA Global". ` : ''}
         ${d.source === 'computed_fallback_no_master_tab'
           ? `Le fichier "Reporting Commercial 2026" ne contient pas encore de vue "Commandé" pour 2027 — ces chiffres sont recalculés depuis "Source Reporting commercial 2026" en attendant.`
           : `Ces chiffres sont repris directement des onglets "${state.vision === 'real' ? '0. Synthèse CA Global ' + state.year : 'test 0. Synthèse CA Global 2026'}" du fichier "Reporting Commercial 2026" (CA, N-1 et budget par spécialité, colonnes G/K/I).`}
