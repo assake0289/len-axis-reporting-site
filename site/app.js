@@ -366,27 +366,38 @@ function renderGlobal() {
   const visionLabel = state.vision === 'real' ? 'Réalisé' : 'Commandé';
   const cmpLabel = compareLabel();
 
+  // Bewink fait partie du CA Digital total, comme dans l'onglet "Synthèse CA Global" : le total de
+  // ce panneau agrège "CA Digital Axis/Len" et "CA Digital Bewink". Bewink garde en revanche sa
+  // propre ligne dans le détail, puisque ce n'est pas une aire thérapeutique.
+  const bewinkCa = d.bewink;
+  const bewinkBudget = (d.budget_totals || {}).bewink;
+  const bewinkN1 = (d.n1 || {}).bewink;
+  const withBewink = (v, extra) =>
+    (typeof v === 'number' ? v : 0) + (typeof extra === 'number' ? extra : 0) || null;
+
+  const digitalTotal = (d.digital_total || 0) + (typeof bewinkCa === 'number' ? bewinkCa : 0);
+  const totalBudgetDigital = withBewink(
+    d.digital_by_spe.reduce((s, r) => s + (r.budget || 0), 0), bewinkBudget);
+  const totalN1Digital = withBewink(d.digital_n1_total, bewinkN1);
+
   const refField = state.compare === 'budget' ? 'budget' : 'n1';
-  const totalRef = state.compare === 'budget'
-    ? (d.digital_by_spe.reduce((s, r) => s + (r.budget || 0), 0) || null)
-    : (d.digital_n1_total || null);
-  const digitalDelta = compareDelta(d.digital_total, totalRef);
+  const totalRef = state.compare === 'budget' ? totalBudgetDigital : totalN1Digital;
+  const digitalDelta = compareDelta(digitalTotal, totalRef);
 
   // Petites vignettes : position à date + avancement vs N-1 et vs Budget, toujours affichés
   // ensemble (indépendamment du toggle vs Budget/vs N-1 qui ne pilote que le repère des jauges).
-  const totalBudgetDigital = d.digital_by_spe.reduce((s, r) => s + (r.budget || 0), 0) || null;
-  const n1AdvanceDelta = compareDelta(d.digital_total, d.digital_n1_total);
-  const budgetAdvanceDelta = compareDelta(d.digital_total, totalBudgetDigital);
+  const n1AdvanceDelta = compareDelta(digitalTotal, totalN1Digital);
+  const budgetAdvanceDelta = compareDelta(digitalTotal, totalBudgetDigital);
   const kpis = [
-    kpiTile('Position à date — CA Digital', fmtK(d.digital_total), `Vision ${visionLabel} · ${state.year}`, 'muted'),
-    kpiTile('Avancement vs N-1', n1AdvanceDelta.text, d.digital_n1_total ? fmtK(d.digital_n1_total) : 'N-1 n.d.', n1AdvanceDelta.cls),
+    kpiTile('Position à date — CA Digital', fmtK(digitalTotal), `Vision ${visionLabel} · ${state.year}`, 'muted'),
+    kpiTile('Avancement vs N-1', n1AdvanceDelta.text, totalN1Digital ? fmtK(totalN1Digital) : 'N-1 n.d.', n1AdvanceDelta.cls),
     kpiTile('Avancement vs Budget', budgetAdvanceDelta.text, totalBudgetDigital ? fmtK(totalBudgetDigital) : 'Budget n.d.', budgetAdvanceDelta.cls),
   ];
 
   // Le total a sa propre échelle (comme chaque ligne de l'onglet Synthèse) : sa couleur foncée le
   // distingue des barres par AT ci-dessous, qui partagent entre elles une échelle commune.
-  const maxValTotal = Math.max(d.digital_total, totalRef || 0, 1) * 1.06;
-  const totalCaPct = Math.max((d.digital_total / maxValTotal) * 100, 0);
+  const maxValTotal = Math.max(digitalTotal, totalRef || 0, 1) * 1.06;
+  const totalCaPct = Math.max((digitalTotal / maxValTotal) * 100, 0);
   const totalRefPct = (totalRef && totalRef > 0) ? (totalRef / maxValTotal) * 100 : null;
   const totalRow = `<div class="gauge-row total-row-first">
     <div class="gauge-name">CA Digital total</div>
@@ -395,7 +406,7 @@ function renderGlobal() {
       ${totalRefPct !== null ? `<div class="gauge-target" style="left:${totalRefPct}%"><span class="gauge-target-label">${fmtK(totalRef)}</span></div>` : ''}
     </div>
     <div class="gauge-stats">
-      <div class="gauge-ca">${fmtK(d.digital_total)}</div>
+      <div class="gauge-ca">${fmtK(digitalTotal)}</div>
       <div class="gauge-cmp">${cmpLabel} : ${totalRef !== null && totalRef !== undefined ? fmtK(totalRef) : 'n.d.'}</div>
     </div>
     <div class="gauge-pct ${digitalDelta.cls}">${digitalDelta.text}</div>
@@ -426,10 +437,7 @@ function renderGlobal() {
   // Bewink : entité suivie à part dans le fichier source (section "BEWINK", distincte du bloc
   // "DIGITAL"). Elle n'est pas une spécialité médicale et n'entre pas dans "CA Digital Axis/Len",
   // d'où une ligne dédiée, hors du total ci-dessus.
-  const bewinkCa = d.bewink;
-  const bewinkRef = state.compare === 'budget'
-    ? (d.budget_totals || {}).bewink
-    : (d.n1 || {}).bewink;
+  const bewinkRef = state.compare === 'budget' ? bewinkBudget : bewinkN1;
   let bewinkRow = '';
   if (bewinkCa !== undefined && bewinkCa !== null) {
     // Même échelle que les lignes par AT ci-dessus : une jauge à l'échelle propre donnerait à
@@ -438,7 +446,7 @@ function renderGlobal() {
     const bRefPct = (bewinkRef && bewinkRef > 0) ? Math.min((bewinkRef / maxVal) * 100, 100) : null;
     const bDelta = compareDelta(bewinkCa, bewinkRef);
     bewinkRow = `<div class="gauge-row total-row-first">
-      <div class="gauge-name">Bewink <span style="opacity:.6;font-weight:400">(hors total)</span></div>
+      <div class="gauge-name">Bewink</div>
       <div class="gauge-track">
         <div class="gauge-fill" style="width:${bCaPct}%"></div>
         ${bRefPct !== null ? `<div class="gauge-target" style="left:${bRefPct}%"><span class="gauge-target-label">${fmtK(bewinkRef)}</span></div>` : ''}
@@ -467,7 +475,7 @@ function renderGlobal() {
       ${gaugeRows}
       ${bewinkRow}
       <div class="footnote">
-        ${bewinkRow ? `Bewink n'est pas une spécialité médicale : c'est une section distincte du fichier source, hors du "CA Digital total" ci-dessus qui porte sur le seul périmètre Axis/Len. Elle est en revanche bien intégrée à la ligne "CA Digital" de l'onglet "Synthèse CA Global". ` : ''}
+        ${bewinkRow ? `Bewink est comptée dans le "CA Digital total" ci-dessus, comme dans l'onglet "Synthèse CA Global", mais figure sur sa propre ligne : ce n'est pas une aire thérapeutique mais une section distincte du fichier source. ` : ''}
         ${d.source === 'computed_fallback_no_master_tab'
           ? `Le fichier "Reporting Commercial 2026" ne contient pas encore de vue "Commandé" pour 2027 — ces chiffres sont recalculés depuis "Source Reporting commercial 2026" en attendant.`
           : `Ces chiffres sont repris directement des onglets "${state.vision === 'real' ? '0. Synthèse CA Global ' + state.year : 'test 0. Synthèse CA Global 2026'}" du fichier "Reporting Commercial 2026" (CA, N-1 et budget par spécialité, colonnes G/K/I).`}
@@ -764,6 +772,17 @@ function renderClients() {
   const visionLabel = state.vision === 'real' ? 'Réalisé' : 'Commandé';
   const cmpLabel = compareLabel();
   const refField = state.compare === 'budget' ? 'budget' : 'n1';
+
+  // Bewink est absent de l'onglet Client du fichier source (il n'est rattaché à aucun client),
+  // mais il est compté dans le CA Digital total ici comme partout ailleurs — règle unique sur
+  // tout le dashboard. Il apparaît donc sur sa propre ligne, sous les clients.
+  const p0 = currentSlice() || {};
+  const bewinkCa = p0.bewink;
+  const bewinkRef = state.compare === 'budget'
+    ? (p0.budget_totals || {}).bewink
+    : (p0.n1 || {}).bewink;
+  const hasBewink = typeof bewinkCa === 'number';
+
   const maxVal = Math.max(...d.top_clients.map(r => Math.max(r.ca, r[refField] || 0)), 1) * 1.06;
 
   const rows = d.top_clients.map(r => {
@@ -786,11 +805,26 @@ function renderClients() {
     </div>`;
   }).join('');
 
-  const totalRef = d.top_clients.reduce((s, r) => s + (r[refField] || 0), 0) || null;
-  const totalDelta = compareDelta(d.total, totalRef);
+  const bewinkRow = hasBewink ? `<div class="gauge-row total-row-first">
+      <div class="gauge-name">Bewink</div>
+      <div class="gauge-track">
+        <div class="gauge-fill" style="width:${Math.max((bewinkCa / maxVal) * 100, 0)}%"></div>
+        ${(bewinkRef && bewinkRef > 0) ? `<div class="gauge-target" style="left:${Math.min((bewinkRef / maxVal) * 100, 100)}%"><span class="gauge-target-label">${fmtK(bewinkRef)}</span></div>` : ''}
+      </div>
+      <div class="gauge-stats">
+        <div class="gauge-ca">${fmtK(bewinkCa)}</div>
+        <div class="gauge-cmp">${cmpLabel} : ${bewinkRef !== null && bewinkRef !== undefined ? fmtK(bewinkRef) : 'n.d.'}</div>
+      </div>
+      <div class="gauge-pct ${compareDelta(bewinkCa, bewinkRef).cls}">${compareDelta(bewinkCa, bewinkRef).text}</div>
+    </div>` : '';
+
+  const clientsRef = d.top_clients.reduce((s, r) => s + (r[refField] || 0), 0);
+  const totalRef = (clientsRef + (typeof bewinkRef === 'number' ? bewinkRef : 0)) || null;
+  const digitalTotal = (d.total || 0) + (hasBewink ? bewinkCa : 0);
+  const totalDelta = compareDelta(digitalTotal, totalRef);
 
   const kpis = [
-    kpiTile('CA Digital total', fmtK(d.total), totalRef !== null ? `${totalDelta.text} vs ${cmpLabel} (${fmtK(totalRef)})` : `${cmpLabel} n.d.`, totalDelta.cls),
+    kpiTile('CA Digital total', fmtK(digitalTotal), totalRef !== null ? `${totalDelta.text} vs ${cmpLabel} (${fmtK(totalRef)})` : `${cmpLabel} n.d.`, totalDelta.cls),
     kpiTile('Farming (clients existants)', fmtK(d.total_farming), null),
     kpiTile('Chasse (nouveaux deals)', fmtK(d.total_chasse), null),
   ];
@@ -806,7 +840,9 @@ function renderClients() {
         <div class="item"><span class="swatch" style="background:var(--series-2)"></span>${cmpLabel} (repère)</div>
       </div>
       ${rows}
+      ${bewinkRow}
       <div class="footnote">
+        ${hasBewink ? `Bewink est compté dans le "CA Digital total" ci-dessus, comme sur tout le dashboard, mais figure sur sa propre ligne : le fichier source ne le rattache à aucun client. Les montants Farming et Chasse portent donc sur le seul périmètre Axis/Len et ne se recoupent pas avec ce total. ` : ''}
         ${d.source === 'computed_fallback_no_master_tab'
           ? `Le fichier "Reporting Commercial 2026" ne contient pas encore d'onglet Client pour 2027 — ces chiffres sont recalculés depuis "Source Reporting commercial 2026" en attendant.`
           : `Repris directement de l'onglet "${state.vision === 'real' ? 'test 4. Synthèse Digital Client' : '4. Synthèse Digital Client'}" du fichier "Reporting Commercial 2026". Farming/Chasse = répartition telle que calculée dans ce même onglet. Le budget par client n'est disponible que sur certaines visions selon ce que contient le fichier maître.`}
