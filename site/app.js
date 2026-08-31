@@ -226,6 +226,7 @@ function renderSynthese() {
     { key: 'presse_total', label: 'CA Presse' },
     { key: 'congres_total', label: 'CA Congrès' },
     { key: 'ds_total', label: 'CA DS' },
+    { key: 'bewink', label: 'CA Digital Bewink' },
   ];
 
   const rows = typologies.map(t => {
@@ -263,12 +264,13 @@ function renderSynthese() {
         <div class="item"><span class="swatch" style="background:var(--series-2)"></span>Budget (repère)</div>
         <div class="item"><span class="swatch" style="background:var(--series-4)"></span>N-1 (repère)</div>
         <div class="item"><span class="swatch" style="background:var(--total-color)"></span>CA total (somme des lignes ci-dessus)</div>
+        <div class="item">Bewink est suivi à part : il est inclus dans le CA total mais pas dans le CA Digital (Axis/Len).</div>
       </div>
       ${rows}
       <div class="footnote">
         ${d.source === 'computed_fallback_no_master_tab'
           ? `Cette combinaison n'existe pas encore dans le fichier maître — chiffres calculés depuis "Source Reporting commercial 2026" en attendant.`
-          : `Chiffres, Budget et N-1 repris directement de l'onglet "0. Synthèse CA Global ${state.year}" du fichier "Reporting Commercial 2026" (colonnes G, I et K).`}
+          : `Chiffres, Budget et N-1 repris directement de l'onglet "0. Synthèse CA Global ${state.year}" du fichier "Reporting Commercial 2026" (colonnes G, I et K). La ligne "CA Digital" correspond à "CA Digital Axis/Len" et n'inclut donc pas Bewink, présenté sur sa propre ligne — les deux additionnés donnent la ligne "Chiffre d'affaires Digital" du fichier source.`}
       </div>
     </div>
   `;
@@ -413,6 +415,33 @@ function renderGlobal() {
     </div>`;
   }).join('');
 
+  // Bewink : entité suivie à part dans le fichier source (section "BEWINK", distincte du bloc
+  // "DIGITAL"). Elle n'est pas une spécialité médicale et n'entre pas dans "CA Digital Axis/Len",
+  // d'où une ligne dédiée, hors du total ci-dessus.
+  const bewinkCa = d.bewink;
+  const bewinkRef = state.compare === 'budget'
+    ? (d.budget_totals || {}).bewink
+    : (d.n1 || {}).bewink;
+  let bewinkRow = '';
+  if (bewinkCa !== undefined && bewinkCa !== null) {
+    const bMax = Math.max(bewinkCa, bewinkRef || 0, 1) * 1.06;
+    const bCaPct = Math.max((bewinkCa / bMax) * 100, 0);
+    const bRefPct = (bewinkRef && bewinkRef > 0) ? (bewinkRef / bMax) * 100 : null;
+    const bDelta = compareDelta(bewinkCa, bewinkRef);
+    bewinkRow = `<div class="gauge-row total-row-first">
+      <div class="gauge-name">Bewink <span style="opacity:.6;font-weight:400">(hors total)</span></div>
+      <div class="gauge-track">
+        <div class="gauge-fill" style="width:${bCaPct}%"></div>
+        ${bRefPct !== null ? `<div class="gauge-target" style="left:${bRefPct}%"><span class="gauge-target-label">${fmtK(bewinkRef)}</span></div>` : ''}
+      </div>
+      <div class="gauge-stats">
+        <div class="gauge-ca">${fmtK(bewinkCa)}</div>
+        <div class="gauge-cmp">${cmpLabel} : ${bewinkRef !== null && bewinkRef !== undefined ? fmtK(bewinkRef) : 'n.d.'}</div>
+      </div>
+      <div class="gauge-pct ${bDelta.cls}">${bDelta.text}</div>
+    </div>`;
+  }
+
   document.getElementById('main').innerHTML = `
     <div class="kpi-row">${kpis.join('')}</div>
 
@@ -427,7 +456,9 @@ function renderGlobal() {
       </div>
       ${totalRow}
       ${gaugeRows}
+      ${bewinkRow}
       <div class="footnote">
+        ${bewinkRow ? `Bewink n'est pas une spécialité médicale : c'est une section distincte du fichier source, exclue de "CA Digital Axis/Len" et donc du total ci-dessus, mais bien comptée dans le CA total du groupe (onglet "Synthèse CA Global"). ` : ''}
         ${d.source === 'computed_fallback_no_master_tab'
           ? `Le fichier "Reporting Commercial 2026" ne contient pas encore de vue "Commandé" pour 2027 — ces chiffres sont recalculés depuis "Source Reporting commercial 2026" en attendant.`
           : `Ces chiffres sont repris directement des onglets "${state.vision === 'real' ? '0. Synthèse CA Global ' + state.year : 'test 0. Synthèse CA Global 2026'}" du fichier "Reporting Commercial 2026" (CA, N-1 et budget par spécialité, colonnes G/K/I).`}
