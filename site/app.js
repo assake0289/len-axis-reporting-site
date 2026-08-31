@@ -220,19 +220,26 @@ function renderSynthese() {
   const n1 = d.n1 || {};
   const budgetTotals = d.budget_totals || {};
 
+  // Le CA Digital affiché ici agrège "CA Digital Axis/Len" et "CA Digital Bewink" — soit la ligne
+  // "Chiffre d'affaires Digital" du fichier source. Les 4 typologies bouclent ainsi sur le CA total.
+  const sumKeys = (o, keys) => {
+    const vals = keys.map(k => o[k]).filter(v => typeof v === 'number');
+    return vals.length ? vals.reduce((s, v) => s + v, 0) : undefined;
+  };
+  const DIGITAL_KEYS = ['digital_total', 'bewink'];
+
   const typologies = [
     { key: 'total_ca', label: 'CA total', total: true },
-    { key: 'digital_total', label: 'CA Digital' },
+    { keys: DIGITAL_KEYS, label: 'CA Digital' },
     { key: 'presse_total', label: 'CA Presse' },
     { key: 'congres_total', label: 'CA Congrès' },
     { key: 'ds_total', label: 'CA DS' },
-    { key: 'bewink', label: 'CA Digital Bewink' },
   ];
 
   const rows = typologies.map(t => {
-    const ca = d[t.key] || 0;
-    const budget = budgetTotals[t.key];
-    const n1v = n1[t.key];
+    const ca = (t.keys ? sumKeys(d, t.keys) : d[t.key]) || 0;
+    const budget = t.keys ? sumKeys(budgetTotals, t.keys) : budgetTotals[t.key];
+    const n1v = t.keys ? sumKeys(n1, t.keys) : n1[t.key];
     const maxVal = Math.max(ca, budget || 0, n1v || 0, 1) * 1.15;
     const caPct = Math.max((ca / maxVal) * 100, 0);
     const budgetPct = (budget && budget > 0) ? (budget / maxVal) * 100 : null;
@@ -264,13 +271,12 @@ function renderSynthese() {
         <div class="item"><span class="swatch" style="background:var(--series-2)"></span>Budget (repère)</div>
         <div class="item"><span class="swatch" style="background:var(--series-4)"></span>N-1 (repère)</div>
         <div class="item"><span class="swatch" style="background:var(--total-color)"></span>CA total (somme des lignes ci-dessus)</div>
-        <div class="item">Bewink est suivi à part : il est inclus dans le CA total mais pas dans le CA Digital (Axis/Len).</div>
       </div>
       ${rows}
       <div class="footnote">
         ${d.source === 'computed_fallback_no_master_tab'
           ? `Cette combinaison n'existe pas encore dans le fichier maître — chiffres calculés depuis "Source Reporting commercial 2026" en attendant.`
-          : `Chiffres, Budget et N-1 repris directement de l'onglet "0. Synthèse CA Global ${state.year}" du fichier "Reporting Commercial 2026" (colonnes G, I et K). La ligne "CA Digital" correspond à "CA Digital Axis/Len" et n'inclut donc pas Bewink, présenté sur sa propre ligne — les deux additionnés donnent la ligne "Chiffre d'affaires Digital" du fichier source.`}
+          : `Chiffres, Budget et N-1 repris directement de l'onglet "0. Synthèse CA Global ${state.year}" du fichier "Reporting Commercial 2026" (colonnes G, I et K). La ligne "CA Digital" agrège "CA Digital Axis/Len" et "CA Digital Bewink", soit la ligne "Chiffre d'affaires Digital" du fichier source ; le détail par aire thérapeutique, qui porte sur le seul périmètre Axis/Len, est dans l'onglet "CA Digital par AT".`}
       </div>
     </div>
   `;
@@ -377,18 +383,17 @@ function renderGlobal() {
     kpiTile('Avancement vs Budget', budgetAdvanceDelta.text, totalBudgetDigital ? fmtK(totalBudgetDigital) : 'Budget n.d.', budgetAdvanceDelta.cls),
   ];
 
-  const maxValTotal = Math.max(d.digital_total, totalRef || 0, 1) * 1.06;
-  const totalCaPct = Math.max((d.digital_total / maxValTotal) * 100, 0);
-  const totalRefPct = (totalRef && totalRef > 0) ? (totalRef / maxValTotal) * 100 : null;
-  const totalRow = `<div class="gauge-row total-row-first">
+  // Le total est affiché en ligne de synthèse SANS jauge : une barre de 9,4 M€ et une barre de
+  // 1,3 M€ occupaient auparavant des longueurs comparables, chacune sur son échelle, ce qui
+  // laissait croire que la Cardiologie pesait presque autant que le Digital entier. Toutes les
+  // jauges de ce panneau partagent désormais une seule et même échelle.
+  const totalRow = `<div class="gauge-row total-row-first" style="align-items:center">
     <div class="gauge-name">CA Digital total</div>
-    <div class="gauge-track">
-      <div class="gauge-fill total-fill" style="width:${totalCaPct}%"></div>
-      ${totalRefPct !== null ? `<div class="gauge-target" style="left:${totalRefPct}%"><span class="gauge-target-label">${fmtK(totalRef)}</span></div>` : ''}
+    <div class="gauge-track" style="background:none;border:none">
+      <span style="font-size:13px;opacity:.7">${cmpLabel} : ${totalRef !== null && totalRef !== undefined ? fmtK(totalRef) : 'n.d.'} — échelle propre, non comparable aux barres ci-dessous</span>
     </div>
     <div class="gauge-stats">
       <div class="gauge-ca">${fmtK(d.digital_total)}</div>
-      <div class="gauge-cmp">${cmpLabel} : ${totalRef !== null && totalRef !== undefined ? fmtK(totalRef) : 'n.d.'}</div>
     </div>
     <div class="gauge-pct ${digitalDelta.cls}">${digitalDelta.text}</div>
   </div>`;
@@ -424,9 +429,10 @@ function renderGlobal() {
     : (d.n1 || {}).bewink;
   let bewinkRow = '';
   if (bewinkCa !== undefined && bewinkCa !== null) {
-    const bMax = Math.max(bewinkCa, bewinkRef || 0, 1) * 1.06;
-    const bCaPct = Math.max((bewinkCa / bMax) * 100, 0);
-    const bRefPct = (bewinkRef && bewinkRef > 0) ? (bewinkRef / bMax) * 100 : null;
+    // Même échelle que les lignes par AT ci-dessus : une jauge à l'échelle propre donnerait à
+    // Bewink (62 k€) une barre plus longue qu'une AT à 200 k€, ce qui est trompeur.
+    const bCaPct = Math.max((bewinkCa / maxVal) * 100, 0);
+    const bRefPct = (bewinkRef && bewinkRef > 0) ? Math.min((bewinkRef / maxVal) * 100, 100) : null;
     const bDelta = compareDelta(bewinkCa, bewinkRef);
     bewinkRow = `<div class="gauge-row total-row-first">
       <div class="gauge-name">Bewink <span style="opacity:.6;font-weight:400">(hors total)</span></div>
@@ -449,7 +455,6 @@ function renderGlobal() {
       <h2>CA Digital par spécialité médicale</h2>
       <div class="panel-sub">Vision ${visionLabel} — ${state.year} · comparé à : ${cmpLabel}</div>
       <div class="legend">
-        <div class="item"><span class="swatch" style="background:var(--total-color)"></span>CA Digital total</div>
         <div class="item"><span class="swatch" style="background:var(--series-1)"></span>CA ${visionLabel.toLowerCase()}</div>
         <div class="item"><span class="swatch" style="background:var(--good)"></span>CA ≥ ${cmpLabel}</div>
         <div class="item"><span class="swatch" style="background:var(--series-2)"></span>${cmpLabel} (repère)</div>
@@ -458,7 +463,7 @@ function renderGlobal() {
       ${gaugeRows}
       ${bewinkRow}
       <div class="footnote">
-        ${bewinkRow ? `Bewink n'est pas une spécialité médicale : c'est une section distincte du fichier source, exclue de "CA Digital Axis/Len" et donc du total ci-dessus, mais bien comptée dans le CA total du groupe (onglet "Synthèse CA Global"). ` : ''}
+        ${bewinkRow ? `Bewink n'est pas une spécialité médicale : c'est une section distincte du fichier source, hors du "CA Digital total" ci-dessus qui porte sur le seul périmètre Axis/Len. Elle est en revanche bien intégrée à la ligne "CA Digital" de l'onglet "Synthèse CA Global". Toutes les barres de ce panneau partagent une même échelle ; la ligne de total, d'un autre ordre de grandeur, est donnée sans jauge pour ne pas induire de comparaison visuelle trompeuse. ` : ''}
         ${d.source === 'computed_fallback_no_master_tab'
           ? `Le fichier "Reporting Commercial 2026" ne contient pas encore de vue "Commandé" pour 2027 — ces chiffres sont recalculés depuis "Source Reporting commercial 2026" en attendant.`
           : `Ces chiffres sont repris directement des onglets "${state.vision === 'real' ? '0. Synthèse CA Global ' + state.year : 'test 0. Synthèse CA Global 2026'}" du fichier "Reporting Commercial 2026" (CA, N-1 et budget par spécialité, colonnes G/K/I).`}
