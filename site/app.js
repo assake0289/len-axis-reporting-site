@@ -376,8 +376,12 @@ function renderGlobal() {
     (typeof v === 'number' ? v : 0) + (typeof extra === 'number' ? extra : 0) || null;
 
   const digitalTotal = (d.digital_total || 0) + (typeof bewinkCa === 'number' ? bewinkCa : 0);
+  // Budget LU sur la ligne "CA Digital Axis/Len" du fichier, jamais reconstitué en
+  // sommant les lignes : la somme ignorait l'ajustement Sécu (-494 k€ en réalisé,
+  // -941 k€ en commandé) et les lignes Device, et l'avancement tombait à 84 % au lieu
+  // de 88 %. Même règle que pour le CA et le N-1.
   const totalBudgetDigital = withBewink(
-    d.digital_by_spe.reduce((s, r) => s + (r.budget || 0), 0), bewinkBudget);
+    (d.budget_totals || {}).digital_total, bewinkBudget);
   const totalN1Digital = withBewink(d.digital_n1_total, bewinkN1);
 
   const refField = state.compare === 'budget' ? 'budget' : 'n1';
@@ -783,6 +787,9 @@ function renderClients() {
     : (p0.n1 || {}).bewink;
   const hasBewink = typeof bewinkCa === 'number';
 
+  const withBewink4 = (v, extra) =>
+    (typeof v === 'number' ? v : 0) + (typeof extra === 'number' ? extra : 0) || null;
+
   const maxVal = Math.max(...d.top_clients.map(r => Math.max(r.ca, r[refField] || 0)), 1) * 1.06;
 
   const rows = d.top_clients.map(r => {
@@ -818,9 +825,21 @@ function renderClients() {
       <div class="gauge-pct ${compareDelta(bewinkCa, bewinkRef).cls}">${compareDelta(bewinkCa, bewinkRef).text}</div>
     </div>` : '';
 
-  const clientsRef = d.top_clients.reduce((s, r) => s + (r[refField] || 0), 0);
-  const totalRef = (clientsRef + (typeof bewinkRef === 'number' ? bewinkRef : 0)) || null;
-  const digitalTotal = (d.total || 0) + (hasBewink ? bewinkCa : 0);
+  // Budget et N-1 du total : LUS sur la ligne "Total Général" de l'onglet Client du
+  // fichier. Les sommer à partir des lignes clients ne marchait pas — le budget par
+  // client est le plus souvent absent, si bien que la référence se réduisait au seul
+  // budget Bewink et l'avancement affichait 5315 %.
+  // Pour 2027, l'onglet Client n'existe pas encore dans le fichier : on bascule alors
+  // sur les totaux digitaux de la Synthèse CA Global, seule source fiable.
+  const fallback4 = d.source === 'computed_fallback_no_master_tab';
+  const digitalTotal = fallback4
+    ? (p0.digital_total || 0) + (hasBewink ? bewinkCa : 0)
+    : (d.total || 0) + (hasBewink ? bewinkCa : 0);
+  const totalRef = fallback4
+    ? withBewink4(state.compare === 'budget'
+        ? (p0.budget_totals || {}).digital_total
+        : (p0.n1 || {}).digital_total, bewinkRef)
+    : withBewink4(state.compare === 'budget' ? d.budget_total : d.n1_total, bewinkRef);
   const totalDelta = compareDelta(digitalTotal, totalRef);
 
   const kpis = [
